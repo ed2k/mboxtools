@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-"""consolidate *.txt under directories
- they gaim generated conversation history
+"""convert txt file under directories into mbox format
 """
 
 import email
@@ -17,7 +16,7 @@ def main ():
         print d
         for filename in os.listdir(d):
             path = os.path.join(d, filename)
-            if not os.path.isfile(path):            continue
+            if not os.path.isfile(path): continue
             print filename
             fout.write ('From -\n')
             f = file(path, 'r')
