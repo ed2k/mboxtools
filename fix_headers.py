@@ -1,16 +1,12 @@
 #!/usr/bin/env python
-"""This is an mbox filter. It scans through an entire mbox style mailbox
-and writes the messages to a new file. Each message is passed
-through a filter function which may modify the document or ignore it.
-
-The passthrough_filter() example below simply prints the 'from' email
-address and returns the document unchanged. After running this script
-the input mailbox and output mailbox should be identical.
+""" fix mail headers
 """
 
 import email
 from email.MIMEText import MIMEText
 import sys, os, string, re
+
+import mboxlib
 
 LF = '\x0a'
 
@@ -18,10 +14,10 @@ def emails2mbox_file(mails, filename):
     # write to new mbox file
     fout = file(filename, 'w')
     for msg in mails:
-        fout.write ('From -\n')
-        str = msg.as_string()
-        fout.write(str)
-        if str[len(str)-1] != '\n':
+        fout.write ('From - \n')
+        #str = msg.as_string()
+        fout.write(msg)
+        if msg[len(msg)-1] != '\n':
                 fout.write('\n')
     fout.close()
 
@@ -52,50 +48,49 @@ def fix_header(mailstr):
             hs[idx] = ' ' + h
     header = '\n'.join(hs)
 
-    mm = email.message_from_string(header+'\n\n'+body);
+    mm = (header+'\n\n'+body);
     return mm
 
 def main ():
     mailboxname_in = sys.argv[1]
 
-
     # Open the mailbox.
     mbstr = file(mailboxname_in,'r').read();
- #   mbstr = mbstr.replace('\r\n','\n');
-    mails = mbstr.split("\nFrom -");
+    # mbstr = mbstr.replace('\r\n','\n');
+    mails = mbstr.split("From - \n");
 
-# assume no multipart, otherwise run split_attachements first
+    # assume no multipart, otherwise run split_attachements first
+    nmails = []
     for idx, mail in enumerate(mails):
         #take out the first line
-        i = mail.find("\n");
-        mails[idx] =email.message_from_string( mail[i+1:]);
-        if mails[idx].is_multipart():
-            print  "ERROR, run mail split first"
+        #i = mail.find("\n");
+        if mail.strip() == '': continue
+        m =email.message_from_string(mail);
+        if m.is_multipart():
+            print  "ERROR, split attachment first"
             break
-    print 'read in', len(mails)
+        #if mail[:6] != 'From: ':
+        #    mail = 'From: Unknown Person\n'+mail
+        nmails.append(mail)
+    print 'read in', len(nmails)
+    mails = nmails
 
     # common headers, From, To, Sent, Date, Cc, Subject
     # X-Mozilla-Status, X-Mozilla-Status2, Importance, Received
     # X-Mailer
     m1 = []
-    m2 = []
     for idx, msg in enumerate(mails):
-        if len(msg.keys()) >= 3 :
-            m1.append(msg)
-            continue 
+        mm = mboxlib.fix_column_format2(msg)
+        #m2 = mm.split('From: ') 
+        #for m in m2[1:]: 
+        #    m3 = fix_header('From: '+m)
+        mm = mboxlib.fix_header(mm)
+        m1.append(mm)
 
-        m = fix_header(msg.get_payload())
 
-        if len(m.keys()) < 3:
-            #print m.keys() , msg.keys()
-            #filter out not-fixed
-            m2.append(m);
-        else: m1.append(m)    
-        
-
-    emails2mbox_file(m1,'t1')
-    emails2mbox_file(m2,'t2')
-#   print len(mails) 
+    emails2mbox_file(m1,'test')
+    #emails2mbox_file(m2,'t2')
+    print ('after ',len(m1)) 
 
 # compare date for list of emails
 def cmp_date(a,b):

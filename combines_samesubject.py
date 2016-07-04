@@ -7,15 +7,18 @@ from email.MIMEText import MIMEText
 import sys, os, string, re
 
 LF = '\x0a'
+def remove_re_fw(s):
+    while s[:4] in ['RE: ', 'FW: ', 'Re: ', 'Fw: ']:
+        s = s[4:]
+    return s
+ 
 def same_subject(s1, s2):
     #TODO use sequence matcher to catalog similar subject
     # such as ignore tab, space etc.
-    if len(s1) < len(s2): s = s1; s1 = s2
-    elif len(s1) == len(s2): return s1 == s2
+    s1 = remove_re_fw(s1)
+    s2 = remove_re_fw(s2)
+    return s1 == s2
 
-    prefix = s1[0:3].upper()
-    return (prefix =='RE: ' or prefix=='FW: ') and s == s1[4:]
-    
 def main ():
     mailboxname_in = sys.argv[1]
 
@@ -62,32 +65,42 @@ def main ():
     ss = []
     for idx, msg in enumerate(mails):
         found_subject = False
-        for items in ss:
-            if same_subject(items[0]['Subject'], msg['Subject']):
-                found_subject = True
-                # don't put duplicate emails
-                duplicated = False
-                for jdx,item in enumerate(items):
-                    body = item.get_payload();
-                    b2 = msg.get_payload();
-                    if len(body)>= len(b2):
-                        if body.find(b2) != -1:
-                            duplicated = True; break;
-                    else :
-                        if b2.find(body) != -1:
-                            duplicated = True;
-                            # replace existing one
-                            items[jdx] = msg;
-                            break;
-                    
-                if not duplicated:
-                    items.append(msg)
-                else: print 'found dup', msg['Subject']
-                break
+        for k, items in enumerate(ss):
+            if not same_subject(items[0]['Subject'], msg['Subject']): continue
+            found_subject = True
+            ss[k].append(msg)
         if not found_subject:
-            i = []; i.append(msg);
-            ss.append(i)
+            ss.append([msg])
 
+    nss = []
+    for items in ss:
+        # sorted by size
+        items.sort(key=lambda a:len(a.get_payload()), reverse=True)
+        nss.append(items)
+
+
+    # create same subject list
+    ss = nss
+    print 'diff subjects', len(ss)
+    nss = []
+    for items in ss:
+        # don't put duplicate emails
+        duplicated = False
+        nitems = [items[0]]
+        
+        for item in items[1:]:
+            b2 = item.get_payload().strip()
+            not_dup = True
+            for i in nitems:
+                body = i.get_payload()
+                if body.find(b2) != -1:
+                    not_dup = False
+                    print ('found dup', item['Subject'])
+                    break         
+            if not_dup: nitems.append(item)
+        nss.append(nitems)
+            
+    ss = nss
     print 'diff subjects', len(ss)
     # write to new mbox file
     fout = file('test', 'w')
@@ -96,11 +109,12 @@ def main ():
             fout.write ('From - \n')
             d = msg['Date']
             s = msg['Sent']
-            if d is None and s is None: print 'both None', msg['Subject']
-            if s is not None and d is not None: print 'both'
-            str = msg.as_string()
-            fout.write(str)
-            if str[len(str)-1] != '\n':
+            w = msg['When']
+            msgstr = msg.as_string()
+            if d is None and s is None and w is None: print ('No_DSW', [msgstr])
+            if s is not None and d is not None: print ('both', [msgstr])
+            fout.write(msgstr)
+            if msgstr[len(msgstr)-1] != '\n':
                 fout.write('\n')
     fout.close()
 #   print len(mails) 

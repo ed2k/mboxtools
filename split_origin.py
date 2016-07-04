@@ -1,12 +1,16 @@
 #!/usr/bin/env python
-"""assume no multipart, 
+"""assume no multipart, split mails into small pieces, i.e 
+try to keep the reply part as a separate mail
 """
 
 import email
 from email.MIMEText import MIMEText
 import sys, os, string, re
 
+import mboxlib
+
 LF = '\x0a'
+
 
 def main ():
     mailboxname_in = sys.argv[1]
@@ -14,7 +18,7 @@ def main ():
 
     # Open the mailbox.
     mbstr = file(mailboxname_in,'r').read();
-    mails = mbstr.split("\nFrom -");
+    mails = mbstr.split("\nFrom - \n");
 
     for idx, mail in enumerate(mails):
         #take out the first line
@@ -23,14 +27,15 @@ def main ():
     print 'read in', len(mails)
     
     for msg in mails:
-        parts = msg.get_payload().split('-----Original Message-----\n')
+        s = mboxlib.fix_column_format(msg.get_payload())
+        parts = s.split('\nFrom: ')
         if len(parts) == 1: continue;
         #print len(parts)
         msg.set_payload(parts[0])
         for part in parts[1:]:
             m = re.sub(r'\n>[ \t]*','\n','\n'+part);
             # take out first '\n'
-            m = m[1:]
+            m = 'From: '+m
             checks = m.split('\n\n')
             if len(checks) < 2:
                 m = m.replace('=20','');
@@ -61,7 +66,7 @@ def main ():
 
     fout = file('test', 'w')
     for idx, msg in enumerate(mails):
-        fout.write ('From -\n')
+        fout.write ('From - \n')
         str = msg.as_string()
         fout.write(str)
         if str[len(str)-1] != '\n':
